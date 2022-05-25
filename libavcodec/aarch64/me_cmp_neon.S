@@ -270,3 +270,85 @@ function ff_pix_abs16_x2_neon, export=1
 
         ret
 endfunc
+
+function sse16_neon, export=1
+        // x0 - unused
+        // x1 - pix1
+        // x2 - pix2
+        // x3 - stride
+        // w4 - h
+
+        cmp             w4, #4
+        movi            d18, #0
+        b.lt            2f
+
+// Make 4 iterations at once
+1:
+
+        // res = abs(pix1[0] - pix2[0])
+        // res * res
+
+        ld1             {v0.16b}, [x1], x3              // Load pix1 vector for first iteration
+        ld1             {v1.16b}, [x2], x3              // Load pix2 vector for first iteration
+        uabd            v30.16b, v0.16b, v1.16b         // Absolute difference, first iteration
+        ld1             {v2.16b}, [x1], x3              // Load pix1 vector for second iteration
+        umull           v29.8h, v30.8b, v30.8b          // Multiply lower half of vectors, first iteration
+        ld1             {v3.16b}, [x2], x3              // Load pix2 vector for second iteration
+        umull2          v28.8h, v30.16b, v30.16b        // Multiply upper half of vectors, first iteration
+        uabd            v27.16b, v2.16b, v3.16b         // Absolute difference, second iteration
+        uaddlp          v17.4s, v29.8h                  // Pairwise add, first iteration
+        umull           v26.8h, v27.8b, v27.8b          // Mulitply lower half, second iteration
+        umull2          v25.8h, v27.16b, v27.16b        // Multiply upper half, second iteration
+        ld1             {v4.16b}, [x1], x3              // Load pix1 for third iteration
+        uadalp          v17.4s, v26.8h                  // Pairwise add and accumulate, second iteration
+        ld1             {v5.16b}, [x2], x3              // Load pix2 for third iteration
+        uadalp          v17.4s, v25.8h                  // Pairwise add andd accumulate, second iteration
+        uabd            v24.16b, v4.16b, v5.16b         // Absolute difference, third iteration
+        ld1             {v6.16b}, [x1], x3              // Load pix1 for fourth iteration
+        umull           v23.8h, v24.8b, v24.8b          // Multiply lower half, third iteration
+        umull2          v22.8h, v24.16b, v24.16b        // Multiply upper half, third iteration
+        uadalp          v17.4s, v23.8h                  // Pairwise add and accumulate, third iteration
+        uadalp          v17.4s, v22.8h                  // Pairwise add and accumulate, third iteration
+        ld1             {v7.16b}, [x2], x3              // Load pix2 for fouth iteration
+        uadalp          v17.4s, v28.8h                  // Pairwise add and accumulate, first iteration
+        uabd            v21.16b, v6.16b, v7.16b         // Absolute difference, fourth iteration
+        umull           v20.8h, v21.8b, v21.8b          // Multiply lower half, fourth iteration
+        uadalp          v17.4s, v20.8h                  // Pairwise add and accumulate, fourth iteration
+        umull2          v19.8h, v21.16b, v21.16b        // Multiply upper half, fourth iteration
+        uadalp          v17.4s, v19.8h                  // Pairwise add and accumulate, fourth iteration
+
+        sub             w4, w4, #4                      // h -= 4
+        uaddlv          d16, v17.4s                     // add up accumulator vector
+        cmp             w4, #4
+        add             d18, d18, d16
+
+        b.ge            1b
+
+        cbnz            w4, 2f
+        fmov            w0, s18
+
+        ret
+
+// iterate by one
+2:
+
+        ld1             {v0.16b}, [x1], x3              // Load pix1
+        ld1             {v1.16b}, [x2], x3              // Load pix2
+
+        uabd            v30.16b, v0.16b, v1.16b
+        umull           v29.8h, v0.8b, v1.8b
+        umull2          v28.8h, v0.16b, v1.16b
+        uaddlp          v17.4s, v29.8h
+        uadalp          v17.4s, v28.8h
+
+
+        subs            w4, w4, #1
+        uaddlv          d16, v17.4s
+        add             d18, d18, d16
+
+        b.ne            2b
+        fmov            w0, s18
+
+        ret
+
+endfunc

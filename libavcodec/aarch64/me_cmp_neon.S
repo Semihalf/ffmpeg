@@ -352,3 +352,68 @@ function sse16_neon, export=1
         ret
 
 endfunc
+
+function sse4_neon, export=1
+        // x0 - unused
+        // x1 - pix1
+        // x2 - pix2
+        // x3 - stride
+        // w4 - h
+
+        movi            d18, #0
+        movi            d17, #0
+        cmp             w4, #4
+        b.le            2f
+
+// make 4 iterations at once
+1:
+
+        // res = abs(pix1[0] - pix2[0])
+        // res * res
+
+        ld1             {v0.s}[0], [x1], x3             // Load pix1, first iteration
+        ld1             {v1.s}[0], [x2], x3             // Load pix2, first iteration
+        uabdl           v30.8h, v0.8b, v1.8b            // Absolute difference, first iteration
+        ld1             {v2.s}[0], [x1], x3             // Load pix1, second iteration
+        ld1             {v3.s}[0], [x2], x3             // Load pix2, second iteration
+        umull           v16.4s, v30.4h, v30.4h          // Multiply vectors, first iteration
+        uabdl           v29.8h, v2.8b, v3.8b            // Absolute difference, second iteration
+        ld1             {v4.s}[0], [x1], x3             // Load pix1, third iteration
+        ld1             {v5.s}[0], [x2], x3             // Load pix2, third iteration
+        umlal           v16.4s, v29.4h, v29.4h          // Multiply and accumulate, second iteration
+        uabdl           v28.8h, v4.8b, v5.8b            // Absolute difference, third iteration
+        ld1             {v6.s}[0], [x1], x3             // Load pix1, fourth iteration
+        ld1             {v7.s}[0], [x2], x3             // Load pix2, fourth iteration
+        umlal           v16.4s, v28.4h, v28.4h          // Multiply and accumulate, third iteration
+        uabdl           v27.8h, v6.8b, v7.8b            // Absolue difference, fourth iteration
+        umlal           v16.4s, v27.4h, v27.4h          // Multiply and accumulate, fourth iteration
+
+        uaddlv          d17, v16.4s                     // Add vector
+        add             d18, d18, d17
+
+        sub             w4, w4, #4
+        cmp             w4, #4
+        b.ge            1b
+
+        cbnz            w4, 2f
+        fmov            w0, s18
+
+        ret
+
+// iterate by one
+2:
+        ld1             {v0.s}[0], [x1], x3               // Load pix1
+        ld1             {v1.s}[0], [x2], x3               // Load pix2
+        uabdl           v30.8h, v0.8b, v1.8b
+        umull           v16.4s, v30.4h, v30.4h
+
+        uaddlv          d17, v16.4s
+        add             d18, d18, d17
+
+        subs            w4, w4, #1
+        b.ne            2b
+        fmov            w0, s18
+
+        ret
+
+endfunc

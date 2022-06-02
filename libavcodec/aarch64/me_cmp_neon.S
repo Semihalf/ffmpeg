@@ -353,6 +353,78 @@ function sse16_neon, export=1
 
 endfunc
 
+function sse8_neon, export=1
+        // x0 - unused
+        // x1 - pix1
+        // x2 - pix2
+        // x3 - stride
+        // w4 - h
+
+        movi            d18, #0
+        cmp             w4, #4
+        b.le            2f
+
+// make 4 iterations at once
+1:
+
+        // res = abs(pix1[0] - pix2[0])
+        // res * res
+
+        ld1             {v0.8b}, [x1], x3               // Load pix1 for first iteration
+        ld1             {v1.8b}, [x2], x3               // Load pix2 for second iteration
+        uabdl           v30.8h, v0.8b, v1.8b            // Absolute difference, first iteration
+        umull           v21.4s, v30.4h, v30.4h          // Multiply lower half, first iteration
+        ld1             {v2.8b}, [x1], x3               // Load pix1 for second iteration
+        umull2          v20.4s, v30.8h, v30.8h          // Multiply upper half, second iteration
+        ld1             {v3.8b}, [x2], x3               // Load pix2 for second iteration
+        uabdl           v29.8h, v2.8b, v3.8b            // Absolute difference, second iteration
+        ld1             {v4.8b}, [x1], x3               // Load pix1 for third iteration
+        umlal           v21.4s, v29.4h, v29.4h          // Multiply lower half, second iteration
+        ld1             {v5.8b}, [x2], x3               // Load pix2 for third iteration
+        umlal2          v20.4s, v29.8h, v29.8h          // Multiply upper half, second iteration
+        uabdl           v28.8h, v4.8b, v5.8b            // Absolute difference, third iteration
+        ld1             {v6.8b}, [x1], x3               // Load pix1 for fourth iteration
+        umlal           v21.4s, v28.4h, v28.4h          // Multiply lower half, third iteration
+        ld1             {v7.8b}, [x2], x3               // Load pix2 for fourth iteration
+        umlal2          v20.4s, v28.8h, v28.8h          // Multiply upper half, third iteration
+        uabdl           v27.8h, v6.8b, v7.8b            // Absolute difference, fourth iteration
+        umlal           v21.4s, v27.4h, v27.4h          // Multiply lower half, fourth iteration
+        umlal2          v20.4s, v27.8h, v27.8h          // Multiply upper ha;f, fourth iteration
+
+        add             v21.4s, v21.4s, v20.4s          // Add accumulator vectors together
+        sub             w4, w4, #4                      // h -= 4
+        uaddlv          d17, v21.4s                     // Add up vector
+        add             d18, d18, d17
+        cmp             w4, #4
+        b.ge            1b
+
+        cbnz            w4, 2f
+        fmov            w0, s18
+
+        ret
+
+// iterate by one
+2:
+        ld1             {v0.8b}, [x1], x3               // Load pix1
+        ld1             {v1.8b}, [x2], x3               // Load pix2
+
+        uabdl           v30.8h, v0.8b, v1.8b
+        umull           v21.4s, v30.4h, v30.4h
+        umull2          v20.4s, v30.8h, v30.8h
+
+        subs            w4, w4, #1
+
+        uaddlv          d17, v21.4s
+        add             d18, d18, d17
+        uaddlv          d17, v20.4S
+        add             d18, d18, d17
+
+        b.ne            2b
+        fmov            w0, s18
+
+        ret
+endfunc
+
 function sse4_neon, export=1
         // x0 - unused
         // x1 - pix1

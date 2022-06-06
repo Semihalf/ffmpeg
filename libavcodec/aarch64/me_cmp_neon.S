@@ -72,6 +72,59 @@ function ff_pix_abs16_neon, export=1
         ret
 endfunc
 
+function ff_pix_abs8_neon, export=1
+        // x0           unused
+        // x1           uint8_t *pix1
+        // x2           uint8_t *pix2
+        // x3           ptrdiff_t stride
+        // x4           int h
+
+        movi            d18, #0
+        cmp             w4, #4
+        b.lt            2f
+
+// make 4 iterations at once
+1:
+        ld1             {v0.8b}, [x1], x3               // Load pix1 for first iteration
+        ld1             {v1.8b}, [x2], x3               // Load pix2 for first iteration
+        uabdl           v30.8h, v0.8b, v1.8b            // Absolute difference, first iteration
+        ld1             {v2.8b}, [x1], x3               // Load pix1 for second iteration
+        ld1             {v3.8b}, [x2], x3               // Load pix2 for second iteration
+        uabal           v30.8h, v2.8b, v3.8b            // Absolute difference, second iteration
+        ld1             {v4.8b}, [x1], x3               // Load pix1 for third iteration
+        ld1             {v5.8b}, [x2], x3               // Load pix2 for third iteration
+        uabal           v30.8h, v4.8b, v5.8b            // Absolute difference, third iteration
+        ld1             {v6.8b}, [x1], x3               // Load pix1 for foruth iteration
+        ld1             {v7.8b}, [x2], x3               // Load pix2 for fourth iteration
+        uabal           v30.8h, v6.8b, v7.8b            // Absolute difference, foruth iteration
+
+        sub             w4, w4, #4                      // h -= 4
+        uaddlv          s20, v30.8h                     // Add up vector
+        cmp             w4, #4
+        add             d18, d18, d20
+        b.ge            1b
+        cbnz            w4, 2f
+        fmov            w0, s18
+
+        ret
+
+// iterate by one
+2:
+        ld1             {v0.8b}, [x1], x3               // Load pix1
+        ld1             {v1.8b}, [x2], x3               // Load pix2
+
+        uabdl           v16.8h, v0.8b, v1.8b
+
+        uaddlv          s17, v16.8h
+        add             d18, d18, d17
+        subs            w4, w4, #1
+        b.ne            2b
+        fmov            w0, s18
+
+        ret
+
+endfunc
+
 function ff_pix_abs16_xy2_neon, export=1
         // x0           unused
         // x1           uint8_t *pix1

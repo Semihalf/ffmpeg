@@ -50,6 +50,9 @@ int vsad_intra16_neon(MpegEncContext *c, uint8_t *s, uint8_t *dummy,
 int vsse16_neon(MpegEncContext *c, uint8_t *s1, uint8_t *s2,                        
                   ptrdiff_t stride, int h);
 
+int vsse_intra16_neon(MpegEncContext *c, uint8_t *s, uint8_t *dummy,
+                  ptrdiff_t stride, int h);
+
 av_cold void ff_me_cmp_init_aarch64(MECmpContext *c, AVCodecContext *avctx)
 {
     int cpu_flags = av_get_cpu_flags();
@@ -71,5 +74,6 @@ av_cold void ff_me_cmp_init_aarch64(MECmpContext *c, AVCodecContext *avctx)
         c->vsad[4] = vsad_intra16_neon;
 
         c->vsse[0] = vsse16_neon;
+        c->vsse[4] = vsse_intra16_neon;
     }
 }

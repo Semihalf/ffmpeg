@@ -946,3 +946,76 @@ function vsse16_neon, export=1
 
         ret
 endfunc
+
+function vsad_intra16_neon, export=1
+        // x0           unused
+        // x1           uint8_t *pix1
+        // x2           uint8_t *dummy
+        // x3           ptrdiff_t stride
+        // x4           int h
+
+        add             x5, x1, x3 // pix1 + stride
+        movi            d18, #0
+
+        sub             w4, w4, #1 // we need to make h-1 iterations
+        cmp             w4, #4
+        b.lt            2f
+
+// make 4 iterations at once
+1:
+        // v = abs( pix1[0] - pix1[0 + stride] )
+        // score = sum(v)
+        // abs(x) = ( (x > 0) ? (x) : (-x) )
+        ld1             {v0.16b}, [x1], x3
+        ld1             {v1.16b}, [x5], x3
+
+        ld1             {v2.16b}, [x1], x3
+        ld1             {v3.16b}, [x5], x3
+
+        ld1             {v4.16b}, [x1], x3
+        ld1             {v5.16b}, [x5], x3
+
+        ld1             {v6.16b}, [x1], x3
+        ld1             {v7.16b}, [x5], x3
+
+        uabd            v30.16b, v0.16b, v1.16b
+        uaddlv          h19, v30.16b
+        add             d18, d18, d19
+
+        uabd            v29.16b, v2.16b, v3.16b
+        uaddlv          h20, v29.16b
+        add             d18, d18, d20
+
+        uabd            v28.16b, v4.16b, v5.16b
+        uaddlv          h21, v28.16b
+        add             d18, d18, d21
+
+        uabd            v27.16b, v6.16b, v7.16b
+        uaddlv          h22, v27.16b
+        add             d18, d18, d22
+
+        sub             w4, w4, #4
+        cmp             w4, #4
+        b.ge            1b
+        cbnz            w4, 2f
+
+        fmov            w0, s18
+
+        ret
+
+// iterate by one
+2:
+        ld1             {v0.16b}, [x1], x3
+        ld1             {v1.16b}, [x5], x3
+
+        uabd            v30.16b, v0.16b, v1.16b
+        uaddlv          h17, v30.16b
+        add             d18, d18, d17
+
+        subs            w4, w4, #1
+        cbnz            w4, 2b
+        fmov            w0, s18
+
+        ret
+
+endfunc

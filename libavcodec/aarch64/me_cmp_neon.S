@@ -1117,3 +1117,186 @@ function vsse_intra16_neon, export=1
         ret
 
 endfunc
+
+function nsse16_neon, export=1
+        // x0           multiplier
+        // x1           uint8_t *pix1
+        // x2           uint8_t *pix2
+        // x3           ptrdiff_t stride
+        // x4           int h
+
+        stp             d8, d9, [sp, #-0x10]!
+        stp             d10, d11, [sp, #-0x10]!
+        stp             d12, d13, [sp, #-0x10]!
+        stp             d14, d15, [sp, #-0x10]!
+
+        str             x0, [sp, #-0x10]!
+        stp             x1, x2, [sp, #-0x10]!
+        stp             x3, x4, [sp, #-0x10]!
+        str             lr, [sp, #-0x10]!
+        bl              sse16_neon
+        ldr             lr, [sp], #0x10
+        mov             w9, w0 /// here we store score1
+        ldp             x3, x4, [sp], #0x10
+        ldp             x1, x2, [sp], #0x10
+        ldr             x5, [sp], #0x10
+
+        movi            v16.8h, #0
+        mov             x10, x1         // x1
+        add             x11, x1, x3     // x1 + stride
+        add             x12, x1, #1      // x1 + 1
+        add             x13, x11, #1     // x1 + stride + 1
+
+        mov             x14, x2         // x2
+        add             x15, x2, x3     // x2 + stride
+        add             x16, x2, #1      // x2 + 1
+        add             x17, x15, #1     // x2 + stride + 1
+
+        subs            w4, w4, #1 /// we need to make h-1 iterations
+        cmp             w4, #2
+        b.lt            2f
+
+// make 4 iterations at once
+1:
+        ld1             {v0.16b}, [x10], x3
+        ld1             {v1.16b}, [x11], x3
+        ld1             {v2.16b}, [x12], x3
+        ld1             {v3.16b}, [x13], x3
+        ld1             {v4.16b}, [x14], x3
+        ld1             {v5.16b}, [x15], x3
+        ld1             {v6.16b}, [x16], x3
+        ld1             {v7.16b}, [x17], x3
+
+        ld1             {v8.16b}, [x10], x3
+        ld1             {v9.16b}, [x11], x3
+        ld1             {v10.16b}, [x12], x3
+        ld1             {v11.16b}, [x13], x3
+        ld1             {v12.16b}, [x14], x3
+        ld1             {v13.16b}, [x15], x3
+        ld1             {v14.16b}, [x16], x3
+        ld1             {v15.16b}, [x17], x3
+
+        usubl           v30.8h, v0.8b, v1.8b
+        usubl2          v29.8h, v0.16b, v1.16b
+        usubl           v28.8h, v3.8b, v2.8b
+        usubl2          v27.8h, v3.16b, v2.16b
+
+        sqadd           v30.8h, v30.8h, v28.8h
+        sqadd           v29.8h, v29.8h, v27.8h
+        sqabs           v30.8h, v30.8h
+        sqabs           v29.8h, v29.8h
+
+        usubl           v28.8h, v4.8b, v5.8b
+        usubl2          v27.8h, v4.16b, v5.16b
+        usubl           v26.8h, v7.8b, v6.8b
+        usubl2          v25.8h, v7.16b, v6.16b
+
+        sqadd           v28.8h, v28.8h, v26.8h
+        sqadd           v27.8h, v27.8h, v25.8h
+        sqabs           v28.8h, v28.8h
+        sqabs           v27.8h, v27.8h
+
+        sqsub           v30.8h, v30.8h, v28.8h
+        sqsub           v29.8h, v29.8h, v27.8h
+
+        ins             v29.h[7], wzr
+
+        saddlv          s17, v30.8h
+        sqadd           d16, d16, d17
+        saddlv          s17, v29.8h
+        sqadd           d16, d16, d17 // first iteration ends here
+
+        usubl           v24.8h, v8.8b, v9.8b
+        usubl2          v23.8h, v8.16b, v9.16b
+        usubl           v22.8h, v11.8b, v10.8b
+        usubl2          v21.8h, v11.16b, v10.16b
+
+        sqadd           v24.8h, v24.8h, v22.8h
+        sqadd           v23.8h, v23.8h, v21.8h
+        sqabs           v24.8h, v24.8h
+        sqabs           v23.8h, v23.8h
+
+        usubl           v22.8h, v12.8b, v13.8b
+        usubl2          v21.8h, v12.16b, v13.16b
+        usubl           v20.8h, v15.8b, v14.8b
+        usubl2          v19.8h, v15.16b, v14.16b
+
+        sqadd           v22.8h, v22.8h, v20.8h
+        sqadd           v21.8h, v21.8h, v19.8h
+        sqabs           v22.8h, v22.8h
+        sqabs           v21.8h, v21.8h
+
+        sqsub           v24.8h, v24.8h, v22.8h
+        sqsub           v23.8h, v23.8h, v21.8h
+
+        ins             v23.h[7], wzr
+
+        saddlv          s17, v24.8h
+        add             d16, d16, d17
+        saddlv          s17, v23.8h
+        add             d16, d16, d17 /// in d16 we store score2
+
+        sub             w4, w4, #2
+        cmp             w4, #2
+        b.ge            1b
+        cbz             w4, 3f
+
+// iterate by one
+2:
+
+        ld1             {v0.16b}, [x10], x3
+        ld1             {v1.16b}, [x11], x3
+        ld1             {v2.16b}, [x12], x3
+        ld1             {v3.16b}, [x13], x3
+        ld1             {v4.16b}, [x14], x3
+        ld1             {v5.16b}, [x15], x3
+        ld1             {v6.16b}, [x16], x3
+        ld1             {v7.16b}, [x17], x3
+
+        usubl           v30.8h, v0.8b, v1.8b
+        usubl2          v29.8h, v0.16b, v1.16b
+        usubl           v28.8h, v3.8b, v2.8b
+        usubl2          v27.8h, v3.16b, v2.16b
+
+        sqadd           v30.8h, v30.8h, v28.8h
+        sqadd           v29.8h, v29.8h, v27.8h
+        sqabs           v30.8h, v30.8h
+        sqabs           v29.8h, v29.8h
+
+        usubl           v28.8h, v4.8b, v5.8b
+        usubl2          v27.8h, v4.16b, v5.16b
+        usubl           v26.8h, v7.8b, v6.8b
+        usubl2          v25.8h, v7.16b, v6.16b
+
+        sqadd           v28.8h, v28.8h, v26.8h
+        sqadd           v27.8h, v27.8h, v25.8h
+        sqabs           v28.8h, v28.8h
+        sqabs           v27.8h, v27.8h
+
+        sqsub           v30.8h, v30.8h, v28.8h
+        sqsub           v29.8h, v29.8h, v27.8h
+
+        ins             v29.h[7], wzr
+
+        saddlv          s17, v30.8h
+        add             d16, d16, d17
+        saddlv          s17, v29.8h
+        add             d16, d16, d17 // first iteration ends here
+
+        subs            w4, w4, #1
+        cbnz            w4, 2b
+
+3:
+        sqabs           s16, s16
+        fmov            w0, s16
+
+        mul             w0, w0, w5
+        add             w0, w0, w9
+
+        ldp             d14, d15, [sp], #0x10
+        ldp             d12, d13, [sp], #0x10
+        ldp             d10, d11, [sp], #0x10
+        ldp             d8, d9, [sp], #0x10
+
+        ret
+endfunc

@@ -1300,3 +1300,500 @@ function nsse16_neon, export=1
 
         ret
 endfunc
+
+function hadamard8_diff8x8_neon, export=1
+        // x0 - unused
+        // x1 - uint8_t *dst
+        // x2 - uint8_t *src
+        // x3 - ptrdiff_t stride
+        // x4 - int h
+
+        cmp             w4, #8
+        b.ne            2f
+
+        stp             d8, d9, [sp, #-0x10]!
+        stp             d10, d11, [sp, #-0x10]!
+        stp             d12, d13, [sp, #-0x10]!
+        stp             d14, d15, [sp, #-0x10]!
+
+        // We need to load src and dst into vectors, 8 vectors for each
+
+        // Initialize vectors for src
+        ld1             {v8.8b}, [x1], x3
+        ld1             {v9.8b}, [x1], x3
+        ld1             {v10.8b}, [x1], x3
+        ld1             {v11.8b}, [x1], x3
+        ld1             {v12.8b}, [x1], x3
+        ld1             {v13.8b}, [x1], x3
+        ld1             {v14.8b}, [x1], x3
+        ld1             {v15.8b}, [x1], x3
+
+        trn1            v30.8b, v8.8b, v8.8b
+        trn2            v29.8b, v8.8b, v8.8b
+        uaddl           v8.8h, v30.8b, v29.8b
+        usubl           v30.8h, v30.8b, v29.8b
+        uzp1            v8.8h, v8.8h, v8.8h
+        uzp2            v30.8h, v30.8h, v30.8h
+        zip1            v29.8h, v8.8h, v30.8h
+        zip2            v29.8h, v8.8h, v30.8h
+
+        trn1            v28.8b, v9.8b, v9.8b
+        trn2            v27.8b, v9.8b, v9.8b
+        uaddl           v9.8h, v28.8b, v27.8b
+        usubl           v28.8h, v28.8b, v27.8b
+        uzp1            v9.8h, v9.8h, v9.8h
+        uzp2            v28.8h, v28.8h, v28.8h
+        zip1            v27.8h, v9.8h, v28.8h
+        zip2            v27.8h, v9.8h, v28.8h
+
+        trn1            v26.8b, v10.8b, v10.8b
+        trn2            v25.8b, v10.8b, v10.8b
+        uaddl           v10.8h, v26.8b, v25.8b
+        usubl           v26.8h, v26.8b, v25.8b
+        uzp1            v10.8h, v10.8h, v10.8h
+        uzp2            v26.8h, v26.8h, v26.8h
+        zip1            v25.8h, v10.8h, v26.8h
+        zip2            v25.8h, v10.8h, v26.8h
+
+        trn1            v24.8b, v11.8b, v11.8b
+        trn2            v31.8b, v11.8b, v11.8b
+        uaddl           v11.8h, v24.8b, v31.8b
+        usubl           v24.8h, v24.8b, v31.8b
+        uzp1            v11.8h, v11.8h, v11.8h
+        uzp2            v24.8h, v24.8h, v24.8h
+        zip1            v31.8h, v11.8h, v24.8h
+        zip2            v31.8h, v11.8h, v24.8h
+
+        trn1            v0.8b, v12.8b, v12.8b
+        trn2            v1.8b, v12.8b, v12.8b
+        uaddl           v12.8h, v0.8b, v1.8b
+        usubl           v0.8h, v0.8b, v1.8b
+        uzp1            v12.8h, v12.8h, v12.8h
+        uzp2            v0.8h, v0.8h, v0.8h
+        zip1            v1.8h, v12.8h, v0.8h
+        zip2            v1.8h, v12.8h, v0.8h
+
+        trn1            v2.8b, v13.8b, v13.8b
+        trn2            v3.8b, v13.8b, v13.8b
+        uaddl           v13.8h, v2.8b, v3.8b
+        usubl           v2.8h, v2.8b, v3.8b
+        uzp1            v13.8h, v13.8h, v13.8h
+        uzp2            v2.8h, v2.8h, v2.8h
+        zip1            v3.8h, v13.8h, v2.8h
+        zip2            v3.8h, v13.8h, v2.8h
+
+        trn1            v4.8b, v14.8b, v14.8b
+        trn2            v5.8b, v14.8b, v14.8b
+        uaddl           v14.8h, v4.8b, v5.8b
+        usubl           v4.8h, v4.8b, v5.8b
+        uzp1            v14.8h, v14.8h, v14.8h
+        uzp2            v4.8h, v4.8h, v4.8h
+        zip1            v5.8h, v14.8h, v4.8h
+        zip2            v5.8h, v14.8h, v4.8h
+
+        trn1            v6.8b, v15.8b, v15.8b
+        trn2            v7.8b, v15.8b, v15.8b
+        uaddl           v15.8h, v6.8b, v7.8b
+        usubl           v6.8h, v6.8b, v7.8b
+        uzp1            v15.8h, v15.8h, v15.8h
+        uzp2            v6.8h, v6.8h, v6.8h
+        zip1            v7.8h, v15.8h, v6.8h
+        zip2            v7.8h, v15.8h, v6.8h
+
+        // BUTTERFLY2 is calculated and stored in:
+        // v29, v27, v25, v31, v1, v3, v5, v7
+
+        // v29 under work with BUTTERFLY1, user registers: v30, v29, v16, v10, v8
+
+        uzp1            v30.8h, v29.8h, v29.8h // ac eg ac eg
+        zip1            v8.8h, v30.8h, v30.8h //  aa cc ee gg
+        uzp1            v16.4s, v8.4s, v8.4s //   aa ee aa ee <- first vector
+        uzp2            v10.4s, v8.4s, v8.4s //   cc gg cc gg <-- second vector
+
+        uzp2            v30.8h, v29.8h, v29.8h // bd fh bd fh
+        zip1            v29.8h, v30.8h, v30.8h // bb dd ff hh
+        uzp1            v30.4s, v29.4s, v29.4s // bb ff bb ff <-- third vector
+        uzp2            v29.4s, v29.4s, v29.4s // dd hh dd hh <-- fourth vector
+
+        sqadd           v8.8h, v16.8h, v10.8h //  a+c a+c e+g e+g ...
+        sqsub           v16.8h, v16.8h, v10.8h // a-c a-c e-g e-g ...
+
+        sqadd           v10.8h, v30.8h, v29.8h // b+d b+d f+h f+h ...
+        sqsub           v30.8h, v30.8h, v29.8h // b-d b-d f-h f-h ...
+
+        trn1            v16.8h, v16.8h, v8.8h //  a+c a-c a+c a-c e+g e-g e+g e-g
+        trn1            v8.8h, v30.8h, v10.8h //  b+d b-d b+d b-d f+h f-h f+h f-h
+        rev32           v16.8h, v16.8h
+        rev32           v8.8h, v8.8h
+
+        zip1            v29.8h, v16.8h, v8.8h
+        zip2            v29.8h, v16.8h, v8.8h // a+c b+d a-c b-d e+g f+h e-g f-h
+        // BUTTERFLY1 is now calculated
+
+        // v27 under work with BUTTERFLY1, use registers: v28, v27, v9, v17, v23
+        uzp1            v28.8h, v27.8h, v27.8h // ac eg ac eg
+        zip1            v9.8h, v28.8h, v28.8h //  aa cc ee gg
+        uzp1            v17.4s, v9.4s, v9.4s //   aa ee aa ee <- first vector
+        uzp2            v23.4s, v9.4s, v9.4s //   cc gg cc gg <-- second vector
+
+        uzp2            v28.8h, v27.8h, v27.8h // bd fh bd fh
+        zip1            v27.8h, v28.8h, v28.8h // bb dd ff hh
+        uzp1            v28.4s, v27.4s, v27.4s // bb ff bb ff <-- third vector
+        uzp2            v27.4s, v27.4s, v27.4s // dd hh dd hh <-- fourth vector
+
+        sqadd           v9.8h, v17.8h, v23.8h //  a+c a+c e+g e+g ...
+        sqsub           v17.8h, v17.8h, v23.8h // a-c a-c e-g e-g ...
+
+        sqadd           v23.8h, v28.8h, v27.8h // b+d b+d f+h f+h ...
+        sqsub           v28.8h, v28.8h, v27.8h // b-d b-d f-h f-h ...
+
+        trn1            v17.8h, v17.8h, v9.8h //  a+c a-c a+c a-c e+g e-g e+g e-g
+        trn1            v9.8h, v28.8h, v23.8h //  b+d b-d b+d b-d f+h f-h f+h f-h
+        rev32           v17.8h, v17.8h
+        rev32           v9.8h, v9.8h
+
+        zip1            v27.8h, v17.8h, v9.8h
+        zip2            v27.8h, v17.8h, v9.8h // a+c b+d a-c b-d e+g f+h e-g f-h
+
+        // v25 under work with BUTTERFLY1, use registers: v10, v18, v26, v25, v15
+        uzp1            v26.8h, v25.8h, v25.8h // ac eg ac eg
+        zip1            v10.8h, v26.8h, v26.8h //  aa cc ee gg
+        uzp1            v18.4s, v10.4s, v10.4s //   aa ee aa ee <- first vector
+        uzp2            v15.4s, v10.4s, v10.4s //   cc gg cc gg <-- second vector
+
+        uzp2            v26.8h, v25.8h, v25.8h // bd fh bd fh
+        zip1            v25.8h, v26.8h, v26.8h // bb dd ff hh
+        uzp1            v26.4s, v25.4s, v25.4s // bb ff bb ff <-- third vector
+        uzp2            v25.4s, v25.4s, v25.4s // dd hh dd hh <-- fourth vector
+
+        sqadd           v10.8h, v18.8h, v15.8h //  a+c a+c e+g e+g ...
+        sqsub           v18.8h, v18.8h, v15.8h // a-c a-c e-g e-g ...
+
+        sqadd           v15.8h, v26.8h, v25.8h // b+d b+d f+h f+h ...
+        sqsub           v26.8h, v26.8h, v25.8h // b-d b-d f-h f-h ...
+
+        trn1            v18.8h, v18.8h, v10.8h //  a+c a-c a+c a-c e+g e-g e+g e-g
+        trn1            v10.8h, v26.8h, v15.8h //  b+d b-d b+d b-d f+h f-h f+h f-h
+        rev32           v18.8h, v18.8h
+        rev32           v10.8h, v10.8h
+
+        zip1            v25.8h, v18.8h, v10.8h
+        zip2            v25.8h, v18.8h, v10.8h // a+c b+d a-c b-d e+g f+h e-g f-h
+
+        // v31 under work with BUTTERFLY1, use registers: v31, v11, v19, v24
+        uzp1            v24.8h, v31.8h, v31.8h // ac eg ac eg
+        zip1            v11.8h, v24.8h, v24.8h //  aa cc ee gg
+        uzp1            v19.4s, v11.4s, v11.4s //   aa ee aa ee <- first vector
+        uzp2            v6.4s, v11.4s, v11.4s //   cc gg cc gg <-- second vector
+
+        uzp2            v24.8h, v31.8h, v31.8h // bd fh bd fh
+        zip1            v31.8h, v24.8h, v24.8h // bb dd ff hh
+        uzp1            v24.4s, v31.4s, v31.4s // bb ff bb ff <-- third vector
+        uzp2            v31.4s, v31.4s, v31.4s // dd hh dd hh <-- fourth vector
+
+        sqadd           v11.8h, v19.8h, v6.8h //  a+c a+c e+g e+g ...
+        sqsub           v19.8h, v19.8h, v6.8h // a-c a-c e-g e-g ...
+
+        sqadd           v6.8h, v24.8h, v31.8h // b+d b+d f+h f+h ...
+        sqsub           v24.8h, v24.8h, v31.8h // b-d b-d f-h f-h ...
+
+        trn1            v19.8h, v19.8h, v11.8h //  a+c a-c a+c a-c e+g e-g e+g e-g
+        trn1            v11.8h, v24.8h, v6.8h //  b+d b-d b+d b-d f+h f-h f+h f-h
+        rev32           v19.8h, v19.8h
+        rev32           v11.8h, v11.8h
+
+        zip1            v31.8h, v19.8h, v11.8h
+        zip2            v31.8h, v19.8h, v11.8h // a+c b+d a-c b-d e+g f+h e-g f-h
+
+        // v1 in BUTTERFLY1, use registers: v12, v20, v0, v1
+        uzp1            v14.8h, v1.8h, v1.8h // ac eg ac eg
+        zip1            v12.8h, v14.8h, v14.8h //  aa cc ee gg
+        uzp1            v0.4s, v12.4s, v12.4s //   aa ee aa ee <- first vector
+        uzp2            v6.4s, v12.4s, v12.4s //   cc gg cc gg <-- second vector
+
+        uzp2            v14.8h, v1.8h, v1.8h // bd fh bd fh
+        zip1            v1.8h, v14.8h, v14.8h // bb dd ff hh
+        uzp1            v14.4s, v1.4s, v1.4s // bb ff bb ff <-- third vector
+        uzp2            v1.4s, v1.4s, v1.4s // dd hh dd hh <-- fourth vector
+
+        sqadd           v12.8h, v0.8h, v6.8h //  a+c a+c e+g e+g ...
+        sqsub           v0.8h, v0.8h, v6.8h // a-c a-c e-g e-g ...
+
+        sqadd           v6.8h, v14.8h, v1.8h // b+d b+d f+h f+h ...
+        sqsub           v14.8h, v14.8h, v1.8h // b-d b-d f-h f-h ...
+
+        trn1            v0.8h, v0.8h, v12.8h //  a+c a-c a+c a-c e+g e-g e+g e-g
+        trn1            v12.8h, v14.8h, v6.8h //  b+d b-d b+d b-d f+h f-h f+h f-h
+        rev32           v0.8h, v0.8h
+        rev32           v12.8h, v12.8h
+
+        zip1            v1.8h, v0.8h, v12.8h
+        zip2            v1.8h, v0.8h, v12.8h // a+c b+d a-c b-d e+g f+h e-g f-h
+
+        // v3 in BUTTERFLY1, use registers: v13, v3, v21, v2
+        uzp1            v13.8h, v3.8h, v3.8h // ac eg ac eg
+        zip1            v2.8h, v13.8h, v13.8h //  aa cc ee gg
+        uzp1            v21.4s, v2.4s, v2.4s //   aa ee aa ee <- first vector
+        uzp2            v28.4s, v2.4s, v2.4s //   cc gg cc gg <-- second vector
+
+        uzp2            v13.8h, v3.8h, v3.8h // bd fh bd fh
+        zip1            v3.8h, v13.8h, v13.8h // bb dd ff hh
+        uzp1            v13.4s, v3.4s, v3.4s // bb ff bb ff <-- third vector
+        uzp2            v3.4s, v3.4s, v3.4s // dd hh dd hh <-- fourth vector
+
+        sqadd           v2.8h, v21.8h, v28.8h //  a+c a+c e+g e+g ...
+        sqsub           v21.8h, v21.8h, v28.8h // a-c a-c e-g e-g ...
+
+        sqadd           v28.8h, v13.8h, v3.8h // b+d b+d f+h f+h ...
+        sqsub           v13.8h, v13.8h, v3.8h // b-d b-d f-h f-h ...
+
+        trn1            v21.8h, v21.8h, v2.8h //  a+c a-c a+c a-c e+g e-g e+g e-g
+        trn1            v2.8h, v13.8h, v28.8h //  b+d b-d b+d b-d f+h f-h f+h f-h
+        rev32           v21.8h, v21.8h
+        rev32           v2.8h, v2.8h
+
+        zip1            v3.8h, v21.8h, v2.8h
+        zip2            v3.8h, v21.8h, v2.8h // a+c b+d a-c b-d e+g f+h e-g f-h
+
+        // v5 in BUTTERFLY1, use registers: v14, v22, v4, v5, v26
+        uzp1            v4.8h, v5.8h, v5.8h // ac eg ac eg
+        zip1            v14.8h, v4.8h, v4.8h //  aa cc ee gg
+        uzp1            v22.4s, v14.4s, v14.4s //   aa ee aa ee <- first vector
+        uzp2            v26.4s, v14.4s, v14.4s //   cc gg cc gg <-- second vector
+
+        uzp2            v4.8h, v5.8h, v5.8h // bd fh bd fh
+        zip1            v5.8h, v4.8h, v4.8h // bb dd ff hh
+        uzp1            v4.4s, v5.4s, v5.4s // bb ff bb ff <-- third vector
+        uzp2            v5.4s, v5.4s, v5.4s // dd hh dd hh <-- fourth vector
+
+        sqadd           v14.8h, v22.8h, v26.8h //  a+c a+c e+g e+g ...
+        sqsub           v22.8h, v22.8h, v26.8h // a-c a-c e-g e-g ...
+
+        sqadd           v26.8h, v4.8h, v5.8h // b+d b+d f+h f+h ...
+        sqsub           v4.8h, v4.8h, v5.8h // b-d b-d f-h f-h ...
+
+        trn1            v22.8h, v22.8h, v14.8h //  a+c a-c a+c a-c e+g e-g e+g e-g
+        trn1            v14.8h, v4.8h, v26.8h //  b+d b-d b+d b-d f+h f-h f+h f-h
+        rev32           v22.8h, v22.8h
+        rev32           v14.8h, v14.8h
+
+        zip1            v5.8h, v22.8h, v14.8h
+        zip2            v5.8h, v22.8h, v14.8h // a+c b+d a-c b-d e+g f+h e-g f-h
+
+        // v7 in BUTTERFLY1, use registers: v15, v23, v6, v7
+        uzp1            v11.8h, v7.8h, v7.8h // ac eg ac eg
+        zip1            v15.8h, v11.8h, v11.8h //  aa cc ee gg
+        uzp1            v22.4s, v15.4s, v15.4s //   aa ee aa ee <- first vector
+        uzp2            v23.4s, v15.4s, v15.4s //   cc gg cc gg <-- second vector
+
+        uzp2            v11.8h, v7.8h, v7.8h // bd fh bd fh
+        zip1            v7.8h, v11.8h, v11.8h // bb dd ff hh
+        uzp1            v11.4s, v7.4s, v7.4s // bb ff bb ff <-- third vector
+        uzp2            v7.4s, v7.4s, v7.4s // dd hh dd hh <-- fourth vector
+
+        sqadd           v15.8h, v22.8h, v23.8h //  a+c a+c e+g e+g ...
+        sqsub           v22.8h, v22.8h, v23.8h // a-c a-c e-g e-g ...
+
+        sqadd           v23.8h, v11.8h, v7.8h // b+d b+d f+h f+h ...
+        sqsub           v11.8h, v11.8h, v7.8h // b-d b-d f-h f-h ...
+
+        trn1            v22.8h, v22.8h, v15.8h //  a+c a-c a+c a-c e+g e-g e+g e-g
+        trn1            v15.8h, v11.8h, v23.8h //  b+d b-d b+d b-d f+h f-h f+h f-h
+        rev32           v22.8h, v22.8h
+        rev32           v15.8h, v15.8h
+
+        zip1            v7.8h, v22.8h, v15.8h
+        zip2            v7.8h, v22.8h, v15.8h // a+c b+d a-c b-d e+g f+h e-g f-h
+
+        // BUTTERFLY1 ops are finished and stored in:
+        // v29, v27, v25, v31, v1, v3, v5, v7
+
+        // Next round of BUTTERFLY1 operations...
+
+        // v29 under work with BUTTERFLY1, user registers: v30, v29, v16, v8
+        zip1            v30.8h, v29.8h, v29.8h // aa bb cc dd
+        zip2            v16.8h, v29.8h, v29.8h // ee ff gg hh
+        sqadd           v8.8h, v30.8h, v16.8h //  a+e a+e b+f b+f c+g c+g d+h d+h
+        sqsub           v30.8h, v30.8h, v16.8h // a-e a-e b-f b-f c-g c-g d-h d-h
+        uzp1            v8.8h, v8.8h, v8.8h    // a+e b+f c+g d+h ...
+        uzp2            v30.8h, v30.8h, v30.8h // a-e b-f c-g d-h ...
+        ext             v29.16b, v8.16b, v30.16b, #8 // a+e b+f c+g d+h a-e b-f c-g d-h
+        // BUTTERFLY1 is now calculated
+
+        // v27 under work with BUTTERFLY1, use registers: v28, v27, v9, v17
+        zip1            v28.8h, v27.8h, v27.8h // aa bb cc dd
+        zip2            v9.8h, v27.8h, v27.8h // ee ff gg hh
+        sqadd           v17.8h, v28.8h, v9.8h
+        sqsub           v28.8h, v28.8h, v9.8h
+        uzp1            v17.8h, v17.8h, v17.8h
+        uzp2            v28.8h, v28.8h, v28.8h
+        zip2            v27.8h, v9.8h, v17.8h
+        ext             v27.16b, v17.16b, v28.16b, #8
+
+        // v25 under work with BUTTERFLY1, use registers: v10, v18, v26, v25
+        zip1            v26.8h, v25.8h, v25.8h // aa bb cc dd
+        zip2            v10.8h, v25.8h, v25.8h // ee ff gg hh
+        sqadd           v18.8h, v26.8h, v10.8h
+        sqsub           v26.8h, v26.8h, v10.8h
+        uzp1            v18.8h, v18.8h, v18.8h
+        uzp2            v26.8h, v26.8h, v26.8h
+        zip2            v25.8h, v10.8h, v18.8h
+        ext             v25.16b, v18.16b, v26.16b, #8
+
+        // v31 under work with BUTTERFLY1, use registers: v31, v11, v19, v24
+        zip1            v24.8h, v31.8h, v31.8h // aa bb cc dd
+        zip2            v11.8h, v31.8h, v31.8h // ee ff gg hh
+        sqadd           v19.8h, v24.8h, v11.8h
+        sqsub           v24.8h, v24.8h, v11.8h
+        uzp1            v19.8h, v19.8h, v19.8h
+        uzp2            v24.8h, v24.8h, v24.8h
+        zip2            v31.8h, v11.8h, v19.8h
+        ext             v31.16b, v19.16b, v24.16b, #8
+
+        // v1 in BUTTERFLY1, use registers: v12, v20, v0, v1
+        zip1            v20.8h, v1.8h, v1.8h // aa bb cc dd
+        zip2            v12.8h, v1.8h, v1.8h // ee ff gg hh
+        sqadd           v0.8h, v20.8h, v12.8h
+        sqsub           v20.8h, v20.8h, v12.8h
+        uzp1            v0.8h, v0.8h, v0.8h
+        uzp2            v20.8h, v20.8h, v20.8h
+        zip2            v1.8h, v12.8h, v0.8h
+        ext             v1.16b, v0.16b, v20.16b, #8
+
+        // v3 in BUTTERFLY1, use registers: v13, v3, v21, v2
+        zip1            v21.8h, v3.8h, v3.8h // aa bb cc dd
+        zip2            v13.8h, v3.8h, v3.8h // ee ff gg hh
+        sqadd           v2.8h, v21.8h, v13.8h
+        sqsub           v21.8h, v21.8h, v13.8h
+        uzp1            v2.8h, v2.8h, v2.8h
+        uzp2            v21.8h, v21.8h, v21.8h
+        zip2            v3.8h, v13.8h, v2.8h
+        ext             v3.16b, v2.16b, v21.16b, #8
+
+        // v5 in BUTTERFLY1, use registers: v14, v22, v4, v5
+        zip1            v22.8h, v5.8h, v5.8h // aa bb cc dd
+        zip2            v14.8h, v5.8h, v5.8h // ee ff gg hh
+        sqadd           v4.8h, v22.8h, v14.8h
+        sqsub           v22.8h, v22.8h, v14.8h
+        uzp1            v4.8h, v4.8h, v4.8h
+        uzp2            v22.8h, v22.8h, v22.8h
+        zip2            v5.8h, v14.8h, v4.8h
+        ext             v5.16b, v4.16b, v22.16b, #8
+
+        // v7 in BUTTERFLY1, use registers: v15, v23, v6, v7
+        zip1            v23.8h, v7.8h, v7.8h // aa bb cc dd
+        zip2            v15.8h, v7.8h, v7.8h // ee ff gg hh
+        sqadd           v6.8h, v23.8h, v15.8h
+        sqsub           v23.8h, v23.8h, v15.8h
+        uzp1            v6.8h, v6.8h, v6.8h
+        uzp2            v23.8h, v23.8h, v23.8h
+        zip2            v7.8h, v15.8h, v6.8h
+        ext             v7.16b, v6.16b, v23.16b, #8
+
+        // BUTTERFLY1 ops are finished and stored in:
+        // v29, v27, v25, v31, v1, v3, v5, v7
+
+        // Now, expand next 'for loop'
+        // Do first round of BUTTERFLY1 ops
+
+        // v29 and v27 as args for BUTTERFLY1, tmp reg: v30
+        mov             v30.16b, v29.16b
+        add             v29.8h, v29.8h, v27.8h
+        sub             v27.8h, v30.8h, v27.8h
+
+        // v25 and v31 as args for BUTTERFLY1, tmp reg: v28
+        mov             v28.16b, v25.16b
+        add             v25.8h, v25.8h, v31.8h
+        sub             v31.8h, v28.8h, v31.8h
+
+        // v1 and v3 as args for BUTTERFLY1, tmp reg: v26
+        mov             v26.16b, v1.16b
+        add             v1.8h, v1.8h, v3.8h
+        sub             v3.8h, v26.8h, v3.8h
+
+        // v5 and v7 as args for BUTTERFLY1, tmp reg: v24
+        mov             v24.16b, v5.16b
+        add             v5.8h, v5.8h, v7.8h
+        sub             v7.8h, v24.8h, v7.8h
+
+        // Do second round of BUTTERFLY1 ops
+
+        // v29 and v25 as args for BUTTERFLY1, tmp reg: v30
+        mov             v30.16b, v29.16b
+        add             v29.8h, v29.8h, v25.8h
+        sub             v25.8h, v30.8h, v25.8h
+
+        // v27 and v31 as args for BUTTERFLY1, tmp reg: v28
+        mov             v28.16b, v27.16b
+        add             v27.8h, v27.8h, v31.8h
+        sub             v31.8h, v28.8h, v31.8h
+
+        // v1 and v5 as args for BUTTERFLY1, tmp reg: v26
+        mov             v26.16b, v1.16b
+        add             v1.8h, v1.8h, v5.8h
+        sub             v5.8h, v26.8h, v5.8h
+
+        // v3 and v7 as args for BUTTERFLY1, tmp reg: v24
+        mov             v24.16b, v3.16b
+        add             v3.8h, v3.8h, v7.8h
+        sub             v7.8h, v24.8h, v7.8h
+
+        // Now calculate sum with BUTTERFLYA
+
+        movi             d0, #0
+
+        // v29 and v1 as args for BUTTERFLYA, tmp regs: v30, v28
+        sqadd           v30.8h, v29.8h, v1.8h
+        sqabs           v30.8h, v30.8h
+        sabd            v2.8h, v29.8h, v1.8h
+        uaddlv          s30, v30.8h
+        uaddlv          s28, v2.8h
+        add             d0, d0, d30
+        add             d0, d0, d28
+
+        // v27 and v3 as args for BUTTERFLYA, tmp regs: v26, v24
+        sqadd           v26.8h, v27.8h, v3.8h
+        sqabs           v26.8h, v26.8h
+        sabd            v24.8h, v27.8h, v3.8h
+        uaddlv          s26, v26.8h
+        uaddlv          s24, v24.8h
+        add             d0, d0, d26
+        add             d0, d0, d24
+
+        // v25 and v5 as args for BUTTERFLYA, tmp regs: v22, v20
+        sqadd           v22.8h, v25.8h, v5.8h
+        sqabs           v22.8h, v22.8h
+        sabd            v20.8h, v25.8h, v5.8h
+        uaddlv          s22, v22.8h
+        uaddlv          s20, v20.8h
+        add             d0, d0, d22
+        add             d0, d0, d20
+
+        // v31 and v7 as args for BUTTERFLYA, tmp regs: v18, v16
+        sqadd           v18.8h, v31.8h, v7.8h
+        sqabs           v18.8h, v18.8h
+        sabd            v16.8h, v31.8h, v7.8h
+        uaddlv          s18, v18.8h
+        uaddlv          s16, v16.8h
+        add             d0, d0, d18
+        add             d0, d0, d16
+
+        // sub mean from overall sum
+        mov             h4, v29.h[0]
+        mov             h5, v1.h[0]
+
+        add             d4, d4, d5
+        abs             d4, d4
+
+        sub             d0, d0, d4
+
+2:
+        fmov            w0, s0
+
+        ldp             d14, d15, [sp], #0x10
+        ldp             d12, d13, [sp], #0x10
+        ldp             d10, d11, [sp], #0x10
+        ldp             d8, d9, [sp], #0x10
+
+        ret
+endfunc

@@ -60,6 +60,10 @@ int nsse16_neon(int multiplier, uint8_t *s, uint8_t *s2,
 int nsse16_neon_wrapper(MpegEncContext *c, uint8_t *s1, uint8_t *s2,
                   ptrdiff_t stride, int h);
 
+int hadamard8_diff8x8_neon(MpegEncContext *s, uint8_t *dst,
+                               uint8_t *src, ptrdiff_t stride, int h);
+
+
 av_cold void ff_me_cmp_init_aarch64(MECmpContext *c, AVCodecContext *avctx)
 {
     int cpu_flags = av_get_cpu_flags();
@@ -84,6 +88,8 @@ av_cold void ff_me_cmp_init_aarch64(MECmpContext *c, AVCodecContext *avctx)
         c->vsse[4] = vsse_intra16_neon;
 
         c->nsse[0] = nsse16_neon_wrapper;
+
+        c->hadamard8_diff[5] = hadamard8_diff8x8_neon;
     }
 }
 

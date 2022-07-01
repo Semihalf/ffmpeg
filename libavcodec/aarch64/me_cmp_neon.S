@@ -1797,3 +1797,158 @@ function hadamard8_diff8x8_neon, export=1
 
         ret
 endfunc
+
+function pix_median_abs16_neon, export=1
+        // x0           unused
+        // x1           uint8_t *pix1
+        // x2           uint8_t *pix2
+        // x3           ptrdiff_t stride
+        // w4           int h
+
+        stp             d14, d15, [sp, #-0x10]!
+        sub             w4, w4, #1
+
+        add             x14, x1, #1
+        add             x15, x2, #1
+
+        ld1             {v0.16b}, [x1]
+        ld1             {v1.16b}, [x2]
+        ld1             {v2.16b}, [x14]
+        ld1             {v3.16b}, [x15]
+
+        usubl           v30.8h, v0.8b, v1.8b
+        usubl2          v29.8h, v0.16b, v1.16b
+        mov             v29.h[7], wzr
+
+        usubl           v28.8h, v2.8b, v3.8b
+        usubl2          v27.8h, v2.16b, v3.16b
+        mov             v27.h[7], wzr
+
+        sabd            v28.8h, v30.8h, v28.8h
+        sabd            v27.8h, v29.8h, v27.8h
+        // neon does not allow immediate type extend/sign extend, so
+        // we need to do this crane's dance here...
+        movi            v18.8h, #1
+        smull           v30.4s, v30.4h, v18.4h
+        mov             s18, v30.s[0]
+        sqabs           s18, s18
+        uaddlv          s17, v28.8h
+        sqadd           s18, s18, s17
+        uaddlv          s17, v27.8h
+        sqadd           s18, s18, s17
+
+        cmp             w4, #1
+        b.lt            2f
+
+1:
+
+        ld1             {v0.16b}, [x14], x3 // pix1 vector for V(j-stride)
+        ld1             {v1.16b}, [x15], x3 // pix2 vector for V(j-stride)
+
+        ld1             {v2.16b}, [x1], x3 // pix1 vector for V(j-stride-1)
+        ld1             {v3.16b}, [x2], x3 // pix2 vector for V(j-stride-1)
+
+        ld1             {v4.16b}, [x14] // pix1 vector for V(j)
+        ld1             {v5.16b}, [x15] // pix2 vector for V(j)
+
+        ld1             {v6.16b}, [x1] // pix1 vector for V(j-1)
+        ld1             {v7.16b}, [x2] // pix2 vector for V(j-1)
+
+        usubl           v30.8h, v6.8b, v7.8b // V(j-1)
+        usubl2          v29.8h, v6.16b, v7.16b // V(j-1)
+        mov             v29.h[7], wzr
+
+        usubl           v28.8h, v2.8b, v3.8b // V(j-stride - 1)
+        usubl2          v27.8h, v2.16b, v3.16b // V(j-stride - 1)
+        mov             v27.h[7], wzr
+
+        usubl           v26.8h, v0.8b, v1.8b // V(j-stride)
+        usubl2          v25.8h, v0.16b, v1.16b // V(j-stride)
+        mov             v25.h[7], wzr
+
+        usubl           v24.8h, v4.8b, v5.8b // V(j)
+        usubl2          v23.8h, v4.16b, v5.16b // V(j)
+        mov             v23.h[7], wzr
+
+        sabd            v20.8h, v30.8h, v28.8h
+        mov             h17, v20.h[0]
+        add             d18, d18, d17
+
+        add             v22.8h, v26.8h, v30.8h
+        add             v21.8h, v25.8h, v29.8h
+        sub             v22.8h, v22.8h, v28.8h
+        sub             v21.8h, v21.8h, v27.8h
+
+        // Now we need to find median value for each of three elements of the vectors:
+        // V0: V(j-stride)
+        // V1: V(j-1)
+        // V2: V(j-stride) + V(j-1) - V(j-stride-1)
+        //
+        // Consider following cases:
+        // (1): V0 < V1 < V2
+        // (2): V0 < V2 < V1
+        // (3): V1 < V0 < V2
+        // (4): V1 < V2 < V0
+        // (5): V2 < V0 < V1
+        // (6): V2 < V1 < V0
+        //
+        // Now split comparisons between these three vectors and fill the logic table.
+        // Depending on previous cases, test whether first vector value is greated than the second
+        //
+        //                      (1)     (2)     (3)     (4)     (5)     (6)
+        //      V0 vs V1:        0       0       1       1       0       1
+        //      V0 vs V2:        0       0       0       1       1       1
+        //      V1 vs V2:        0       1       0       0       1       1
+        //
+        //      median:          V1      V2      V0      V2      V0      V1
+        //
+        //      Now, use bitwise operations to find desired values:
+        //      Vx: (V0 vs V1) XOR (V0 vs V2)
+        //      Vy: NOT (Vx OR Vy)
+        //      Vz: (V0 vs V2) XOR (V1 vs V2)
+        //
+        // Use the above logic to find the median.
+
+        cmge            v20.8h, v26.8h, v30.8h // V(j-stride) > V(j-1)
+        cmge            v19.8h, v25.8h, v29.8h // V(j-stride) > V(j-1)
+
+        cmge            v17.8h, v26.8h, v22.8h // V(j-stride) > V(j-stride) + V(j-1) - V(j-stride-1)
+        cmge            v16.8h, v25.8h, v21.8h // V(j-stride) > V(j-stride) + V(j-1) - V(j-stride-1)
+
+        cmge            v15.8h, v30.8h, v22.8h // V(j-1) > V(j-stride) + V(j-1) - V(j-stride-1)
+        cmge            v14.8h, v29.8h, v21.8h // V(j-1) > (j-stride) + V(j-1) - V(j-stride-1)
+
+        eor             v0.16b, v20.16b, v17.16b // V(j-stride)
+        eor             v1.16b, v19.16b, v16.16b // V(j-stride)
+        eor             v2.16b, v17.16b, v15.16b // V(j-stride) + V(j-1) - V(j-stride-1)
+        eor             v3.16b, v16.16b, v14.16b // V(j-stride) + V(j-1) - V(j-stride-1)
+        orr             v4.16b, v0.16b, v2.16b
+        orr             v5.16b, v1.16b, v3.16b
+        not             v4.16b, v4.16b // V(j-1)
+        not             v5.16b, v5.16b // V(j-1)
+
+        bit             v6.16b, v26.16b, v0.16b // insert V(j-stride) if matches
+        bit             v7.16b, v25.16b, v1.16b // insert V(j-stride) if matches
+        bit             v6.16b, v22.16b, v2.16b // insert V(j-stride) + V(j-1) - V(j-stride-1) if matches
+        bit             v7.16b, v21.16b, v3.16b // insert V(j-stride) + V(j-1) - V(j-stride-1) if matches
+
+        bit             v6.16b, v30.16b, v4.16b // insert V(j-1) if matches
+        bit             v7.16b, v29.16b, v5.16b // insert V(j-1) if matches
+
+        sabd            v30.8h, v24.8h, v6.8h
+        sabd            v29.8h, v23.8h, v7.8h
+        uaddlv          s17, v30.8h
+        add             d18, d18, d17
+        uaddlv          s17, v29.8h
+        add             d18, d18, d17
+
+        subs            w4, w4, #1
+        b.ne            1b
+
+2:
+        fmov            w0, s18
+        ldp             d14, d15, [sp], #0x10
+
+        ret
+
+endfunc

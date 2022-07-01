@@ -63,6 +63,8 @@ int nsse16_neon_wrapper(MpegEncContext *c, uint8_t *s1, uint8_t *s2,
 int hadamard8_diff8x8_neon(MpegEncContext *s, uint8_t *dst,
                                uint8_t *src, ptrdiff_t stride, int h);
 
+int pix_median_abs16_neon(MpegEncContext *v, uint8_t *pix1, uint8_t *pix2,
+                             ptrdiff_t stride, int h);
 
 av_cold void ff_me_cmp_init_aarch64(MECmpContext *c, AVCodecContext *avctx)
 {
@@ -90,6 +92,8 @@ av_cold void ff_me_cmp_init_aarch64(MECmpContext *c, AVCodecContext *avctx)
         c->nsse[0] = nsse16_neon_wrapper;
 
         c->hadamard8_diff[5] = hadamard8_diff8x8_neon;
+
+        c->median_sad[0] = pix_median_abs16_neon;
     }
 }
 

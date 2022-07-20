@@ -109,11 +109,10 @@ static void hScale16To15_c(SwsContext *c, int16_t *dst, int dstW,
         int j;
         int srcPos = filterPos[i];
         int val    = 0;
-
         for (j = 0; j < filterSize; j++) {
             val += src[srcPos + j] * filter[filterSize * i + j];
         }
-        // filter=14 bit, input=16 bit, output=30 bit, >> 15 makes 15 bit
+        //filter=14 bit, input=16 bit, output=30 bit, >> 15 makes 15 bit
         dst[i] = FFMIN(val >> sh, (1 << 15) - 1);
     }
 }

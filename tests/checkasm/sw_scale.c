@@ -142,29 +142,40 @@ static void check_hscale(void)
 #define FILTER_SIZES 6
     static const int filter_sizes[FILTER_SIZES] = { 4, 8, 12, 16, 32, 40 };
 
-#define HSCALE_PAIRS 2
+#define HSCALE_PAIRS 4
     static const int hscale_pairs[HSCALE_PAIRS][2] = {
         { 8, 14 },
         { 8, 18 },
+        { 16, 14 },
+        { 16, 18 }
     };
 
+#define DST_WIDTH(x) ( (x) == (14) ? sizeof(uint16_t) : sizeof(uint32_t))
 #define LARGEST_INPUT_SIZE 512
 #define INPUT_SIZES 6
     static const int input_sizes[INPUT_SIZES] = {8, 24, 128, 144, 256, 512};
 
     int i, j, fsi, hpi, width, dstWi;
     struct SwsContext *ctx;
+    void *(*_dst)[2];
+    void *_src;
 
     // padded
     LOCAL_ALIGNED_32(uint8_t, src, [FFALIGN(SRC_PIXELS + MAX_FILTER_WIDTH - 1, 4)]);
-    LOCAL_ALIGNED_32(uint32_t, dst0, [SRC_PIXELS]);
-    LOCAL_ALIGNED_32(uint32_t, dst1, [SRC_PIXELS]);
+    LOCAL_ALIGNED_32(uint16_t, src1, [FFALIGN(SRC_PIXELS + MAX_FILTER_WIDTH - 1, 4)]);
+    LOCAL_ALIGNED_32(uint16_t, dst_ref_16, [SRC_PIXELS]);
+    LOCAL_ALIGNED_32(uint16_t, dst_new_16, [SRC_PIXELS]);
+    LOCAL_ALIGNED_32(uint32_t, dst_ref_32, [SRC_PIXELS]);
+    LOCAL_ALIGNED_32(uint32_t, dst_new_32, [SRC_PIXELS]);
 
     // padded
     LOCAL_ALIGNED_32(int16_t, filter, [SRC_PIXELS * MAX_FILTER_WIDTH + MAX_FILTER_WIDTH]);
     LOCAL_ALIGNED_32(int32_t, filterPos, [SRC_PIXELS]);
     LOCAL_ALIGNED_32(int16_t, filterAvx2, [SRC_PIXELS * MAX_FILTER_WIDTH + MAX_FILTER_WIDTH]);
     LOCAL_ALIGNED_32(int32_t, filterPosAvx, [SRC_PIXELS]);
+
+    void *_dst_16[2] = {dst_ref_16, dst_new_16};
+    void *_dst_32[2] = {dst_ref_32, dst_new_32};
 
     // The dst parameter here is either int16_t or int32_t but we use void* to
     // just cover both cases.
@@ -179,6 +190,7 @@ static void check_hscale(void)
         fail();
 
     randomize_buffers(src, SRC_PIXELS + MAX_FILTER_WIDTH - 1);
+    randomize_buffers(src1, SRC_PIXELS + MAX_FILTER_WIDTH - 1);
 
     for (hpi = 0; hpi < HSCALE_PAIRS; hpi++) {
         for (fsi = 0; fsi < FILTER_SIZES; fsi++) {
@@ -188,6 +200,8 @@ static void check_hscale(void)
                 ctx->srcBpc = hscale_pairs[hpi][0];
                 ctx->dstBpc = hscale_pairs[hpi][1];
                 ctx->hLumFilterSize = ctx->hChrFilterSize = width;
+                _src = ctx->srcBpc == 8 ? (void *)src : (void *)src1;
+                _dst = ctx->dstBpc == 14 ? (void*)_dst_16 : (void*)_dst_32;
 
                 for (i = 0; i < SRC_PIXELS; i++) {
                     filterPos[i] = i;
@@ -226,20 +240,22 @@ static void check_hscale(void)
                     ff_shuffle_filter_coefficients(ctx, filterPosAvx, width, filterAvx2, SRC_PIXELS);
 
                 if (check_func(ctx->hcScale, "hscale_%d_to_%d__fs_%d_dstW_%d", ctx->srcBpc, ctx->dstBpc + 1, width, ctx->dstW)) {
-                    memset(dst0, 0, SRC_PIXELS * sizeof(dst0[0]));
-                    memset(dst1, 0, SRC_PIXELS * sizeof(dst1[0]));
+                    memset(_dst[0], 0, SRC_PIXELS * DST_WIDTH(ctx->dstBpc));
+                    memset(_dst[1], 0, SRC_PIXELS * DST_WIDTH(ctx->dstBpc));
 
-                    call_ref(NULL, dst0, ctx->dstW, src, filter, filterPos, width);
-                    call_new(NULL, dst1, ctx->dstW, src, filterAvx2, filterPosAvx, width);
-                    if (memcmp(dst0, dst1, ctx->dstW * sizeof(dst0[0])))
+                    call_ref(ctx, _dst[0], ctx->dstW, src, filter, filterPos, width);
+                    call_new(ctx, _dst[1], ctx->dstW, src, filterAvx2, filterPosAvx, width);
+                    if (memcmp(_dst[0], _dst[1], ctx->dstW * DST_WIDTH(ctx->dstBpc)))
                         fail();
-                    bench_new(NULL, dst0, ctx->dstW, src, filter, filterPosAvx, width);
+                    bench_new(ctx, _dst[0], ctx->dstW, _src, filter, filterPosAvx, width);
                 }
             }
         }
     }
     sws_freeContext(ctx);
 }
+
+#undef DST_WIDTH
 
 void checkasm_check_sw_scale(void)
 {
